@@ -89,8 +89,10 @@ class VBEPostings:
         bytes
             bytearray yang merepresentasikan urutan integer di postings_list
         """
-        # TODO
-        return None
+        gap_based_list = [postings_list[0]]
+        for i in range(1, len(postings_list)):
+            gap_based_list.append(postings_list[i] - postings_list[i-1])
+        return VBEPostings.vb_encode(gap_based_list)
     
     @staticmethod
     def vb_encode(list_of_numbers):
@@ -98,8 +100,10 @@ class VBEPostings:
         Melakukan encoding (tentunya dengan compression) terhadap
         list of numbers, dengan Variable-Byte Encoding
         """
-        # TODO
-        return []
+        bytestream = bytearray()
+        for number in list_of_numbers:
+            bytestream.extend(VBEPostings.vb_encode_number(number))
+        return bytestream
 
     @staticmethod
     def vb_encode_number(number):
@@ -107,8 +111,14 @@ class VBEPostings:
         Encodes a number using Variable-Byte Encoding
         Lihat buku teks kita!
         """
-        # TODO
-        return 0
+        bytes = []
+        while True:
+            bytes.insert(0, number & 0x7F) # number % 128
+            if number < 128:
+                break
+            number = number >> 7 # number // 128
+        bytes[-1] |= 0x80 # set MSB of the last byte
+        return bytes
 
     @staticmethod
     def decode(encoded_postings_list):
@@ -128,8 +138,11 @@ class VBEPostings:
         List[int]
             list of docIDs yang merupakan hasil decoding dari encoded_postings_list
         """
-        # TODO
-        return []
+        gap_based_list = VBEPostings.vb_decode(encoded_postings_list)
+        postings_list = [gap_based_list[0]]
+        for i in range(1, len(gap_based_list)):
+            postings_list.append(postings_list[i-1] + gap_based_list[i])
+        return postings_list
 
     @staticmethod
     def vb_decode(encoded_bytestream):
@@ -154,13 +167,114 @@ class Simple8bPostings:
     Tidak seperti VBE, Simple-8b menggunakan bit-level encoding dan meng-encode integers ke dalam 64-bit.
 
     """
-    # TODO: 
-    # Silakan buat methode encode, decode, dan helper method lain yang diperlukan. 
-    # Selector table juga di-define di sini.
-    # Anda dibebaskan bereksplorasi untuk metode kompresi ini.
+    SELECTOR_TABLE = [  # Format: (bits_per_integer, integers_coded)
+        (0,240),(0,120),(1,60),(2,30),(3,20),(4,15),(5,12),(6,10),
+        (7,8),(8,7),(10,6),(12,5),(15,4),(20,3),(30,2),(60,1)
+    ]
     
-    
+    @staticmethod
+    def encode(postings_list):
+        """
+        Encode postings_list menjadi stream of bytes menggunakan Simple-8b
 
+        Parameters
+        ----------
+        postings_list: List[int]
+            List of docIDs (postings)
+
+        Returns
+        -------
+        bytes
+            bytearray yang merepresentasikan urutan integer di postings_list
+        """
+        gap_based_list = [postings_list[0]]
+        for i in range(1, len(postings_list)):
+            gap_based_list.append(postings_list[i] - postings_list[i-1])
+        return Simple8bPostings.simple8b_encode(gap_based_list)
+    
+    @staticmethod
+    def simple8b_encode(list_of_numbers):
+        """
+        Encode list of numbers menggunakan algoritma Simple-8b.
+        """
+        bytestream = bytearray()
+        i = 0
+        while i < len(list_of_numbers):
+            selector = Simple8bPostings.find_selector(list_of_numbers[i:])
+            bits_per_integer, integers_coded = Simple8bPostings.SELECTOR_TABLE[selector]
+            if selector == 0:
+                bytestream.extend((selector).to_bytes(8, byteorder='big'))
+                i += 240
+            elif selector == 1:
+                bytestream.extend((selector).to_bytes(8, byteorder='big'))
+                i += 120
+            else:
+                encoded = selector
+                for j in range(integers_coded):
+                    encoded |= (list_of_numbers[i + j] << (4 + bits_per_integer * j))
+                bytestream.extend(encoded.to_bytes(8, byteorder='big'))
+                i += integers_coded
+        return bytestream
+
+    @staticmethod
+    def find_selector(numbers):
+        """
+        Mencari selector yang paling sesuai untuk mengompresi list of numbers.
+        """
+        # Gunakan selector 0 atau 1 untuk handle runs of 1's. (sumber: paper Simple-8b hal. 137)
+        if len(numbers) >= 240 and all(num == 1 for num in numbers[:240]):
+            return 0
+        if len(numbers) >= 120 and all(num == 1 for num in numbers[:120]):
+            return 1
+        # Cek selector lainnya
+        for selector in range(2, 16):
+            bits_per_integer, integers_coded = Simple8bPostings.SELECTOR_TABLE[selector]
+            if len(numbers) >= integers_coded and max(numbers[:integers_coded]) < (1 << bits_per_integer):
+                return selector
+        # Jika nilai terlalu besar, throw error
+        raise ValueError("No suitable selector found for Simple-8b encoding, value too large")
+
+    @staticmethod
+    def decode(encoded_postings_list):
+        """
+        Decodes postings_list dari sebuah stream of bytes. 
+
+        Parameters
+        ----------
+        encoded_postings_list: bytes
+            bytearray merepresentasikan encoded postings list sebagai keluaran
+            dari static method encode di atas.
+
+        Returns
+        -------
+        List[int]
+            list of docIDs yang merupakan hasil decoding dari encoded_postings_list
+        """
+        gap_based_list = Simple8bPostings.simple8b_decode(encoded_postings_list)
+        postings_list = [gap_based_list[0]]
+        for i in range(1, len(gap_based_list)):
+            postings_list.append(postings_list[i-1] + gap_based_list[i])
+        return postings_list
+    
+    @staticmethod
+    def simple8b_decode(encoded_bytestream):
+        """
+        Decode bytestream yang sebelumnya di-encode dengan Simple-8b.
+        """
+        result = []
+        # Proses bytestream per 8 bytes (64 bits / 1 block pada Simple-8b)
+        for i in range(0, len(encoded_bytestream), 8):
+            block = int.from_bytes(encoded_bytestream[i:i+8], byteorder='big')
+            selector = block & 0xF
+            if selector == 0:
+                result.extend([1] * 240)
+            elif selector == 1:
+                result.extend([1] * 120)
+            else:
+                bits_per_integer, integers_coded = Simple8bPostings.SELECTOR_TABLE[selector]
+                for j in range(integers_coded):
+                    result.append((block >> (4 + bits_per_integer * j)) & ((1 << bits_per_integer) - 1))
+        return result
 
 if __name__ == '__main__':
     
