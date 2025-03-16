@@ -1,3 +1,5 @@
+import re
+
 class IdMap:
     """
     Ingat kembali di kuliah, bahwa secara praktis, sebuah dokumen dan
@@ -25,8 +27,7 @@ class IdMap:
 
     def __len__(self):
         """Mengembalikan banyaknya term (atau dokumen) yang disimpan di IdMap."""
-        # TODO
-        return 0
+        return len(self.id_to_str)
 
     def __get_id(self, s):
         """
@@ -34,13 +35,14 @@ class IdMap:
         Jika s tidak ada pada IdMap, lalu assign sebuah integer id baru dan kembalikan
         integer id baru tersebut.
         """
-        # TODO
-        return 0
+        if s not in self.str_to_id:
+            self.str_to_id[s] = len(self.id_to_str)
+            self.id_to_str.append(s)
+        return self.str_to_id[s]
     
     def __get_str(self, i):
         """Mengembalikan string yang terasosiasi dengan index i."""
-        # TODO
-        return ""
+        return self.id_to_str[i]
 
     def __getitem__(self, key):
         """
@@ -54,8 +56,12 @@ class IdMap:
         https://stackoverflow.com/questions/43627405/understanding-getitem-method
 
         """
-        # TODO
-        return None
+        if isinstance(key, str):
+            return self.__get_id(key)
+        elif isinstance(key, int):
+            return self.__get_str(key)
+        else:
+            raise TypeError("Key must be either string or integer")
 
 class QueryParser:
     """
@@ -78,6 +84,7 @@ class QueryParser:
         self.stemmer = stemmer
         self.stopwords = stopwords
         self.token_list = self.__query_string_to_list()
+        self.special_tokens = {'AND', 'OR', 'DIFF', '(', ')'}
         self.token_preprocessed = self.__preprocess_tokens()
     
     def is_valid(self):
@@ -101,8 +108,7 @@ class QueryParser:
         List[str]
             query yang sudah di-parse
         """   
-        # TODO
-        return []
+        return re.findall(r'\(|\)|AND|OR|DIFF|\w+', self.query)
 
     def __preprocess_tokens(self):
         """
@@ -115,8 +121,13 @@ class QueryParser:
         List[str]
             Daftar token yang telah di-preprocess
         """
-        # TODO
-        return []
+        result = []
+        for token in self.token_list:
+            if token not in self.special_tokens:
+                result.append(self.stemmer.stem(token))
+            else:
+                result.append(token)
+        return result
 
     def infix_to_postfix(self):
         """
@@ -131,8 +142,25 @@ class QueryParser:
         list[str]
             list yang berisi token dalam ekspresi postfix
         """
-        # TODO
-        return []
+        st = []
+        result = []
+        for token in self.token_preprocessed:
+            if token not in self.special_tokens:
+                result.append(token)
+            elif token == '(':
+                st.append(token)
+            elif token == ')':
+                while st and st[-1] != '(':
+                    result.append(st.pop())
+                if st:
+                    st.pop()
+            else:
+                while st and st[-1] != '(':
+                    result.append(st.pop())
+                st.append(token)
+        while st:
+            result.append(st.pop())
+        return result
 
 def sort_intersect_list(list_A, list_B):
     """
@@ -151,8 +179,18 @@ def sort_intersect_list(list_A, list_B):
     List[Comparable]
         intersection yang sudah terurut
     """
-    # TODO
-    return []
+    result = []
+    i, j = 0, 0
+    while i < len(list_A) and j < len(list_B):
+        if list_A[i] == list_B[j]:
+            result.append(list_A[i])
+            i += 1
+            j += 1
+        elif list_A[i] < list_B[j]:
+            i += 1
+        else:
+            j += 1
+    return result
 
 def sort_union_list(list_A, list_B):
     """
@@ -170,8 +208,26 @@ def sort_union_list(list_A, list_B):
     List[Comparable]
         union yang sudah terurut
     """
-    # TODO
-    return []
+    result = []
+    i, j = 0, 0
+    while i < len(list_A) and j < len(list_B):
+        if list_A[i] == list_B[j]:
+            result.append(list_A[i])
+            i += 1
+            j += 1
+        elif list_A[i] < list_B[j]:
+            result.append(list_A[i])
+            i += 1
+        else:
+            result.append(list_B[j])
+            j += 1
+    while i < len(list_A):
+        result.append(list_A[i])
+        i += 1
+    while j < len(list_B):
+        result.append(list_B[j])
+        j += 1
+    return result
 
 def sort_diff_list(list_A, list_B):
     """
@@ -189,8 +245,21 @@ def sort_diff_list(list_A, list_B):
     List[Comparable]
         difference yang sudah terurut
     """
-    # TODO
-    return []
+    result = []
+    i, j = 0, 0
+    while i < len(list_A) and j < len(list_B):
+        if list_A[i] == list_B[j]:
+            i += 1
+            j += 1
+        elif list_A[i] < list_B[j]:
+            result.append(list_A[i])
+            i += 1
+        else:
+            j += 1
+    while i < len(list_A):
+        result.append(list_A[i])
+        i += 1
+    return result
 
 if __name__ == '__main__':
 
