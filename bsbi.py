@@ -108,9 +108,6 @@ class BSBIIndex:
 
         total_time = time.time() - start_time
         self.timing_stats['total'] = total_time
-
-        # Update timing stats file
-        self.save()
         
         # Print summary of timing statistics
         print("\nIndexing completed!")
