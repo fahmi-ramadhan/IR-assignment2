@@ -284,6 +284,8 @@ class BSBIIndex:
         if not query_parser.is_valid():
             return []
         postfix_query = query_parser.infix_to_postfix()
+
+        self.load()
         
         stack = []
         for token in postfix_query:
@@ -299,12 +301,14 @@ class BSBIIndex:
                     except: # Term ada tapi tidak ada postings list-nya
                         stack.append([])
             else:
+                right = stack.pop()
+                left = stack.pop()
                 if token == 'AND':
-                    stack.append(sort_intersect_list(stack.pop(), stack.pop()))
+                    stack.append(sort_intersect_list(left, right))
                 elif token == 'OR':
-                    stack.append(sort_union_list(stack.pop(), stack.pop()))
+                    stack.append(sort_union_list(left, right))
                 elif token == 'DIFF':
-                    stack.append(sort_diff_list(stack.pop(), stack.pop()))
+                    stack.append(sort_diff_list(left, right))
 
         if stack:
             result_doc_ids = stack.pop()
