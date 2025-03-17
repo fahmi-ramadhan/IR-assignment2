@@ -9,7 +9,7 @@ from porter2stemmer import Porter2Stemmer
 
 from index import InvertedIndexReader, InvertedIndexWriter
 from util import IdMap, QueryParser, sort_diff_list, sort_intersect_list, sort_union_list
-from compression import StandardPostings, VBEPostings, Simple8bPostings
+from compression import VBEPostings, Simple8bPostings
 
 """ 
 Ingat untuk install tqdm terlebih dahulu
@@ -93,7 +93,7 @@ class BSBIIndex:
             write_time = time.time() - write_start_time
             self.timing_stats['writing_indices'] += write_time
 
-            print(f"Block {block_path} processed in {block_parsing_time:.2f}s (parsing) + {write_time:.2f}s (writing)")
+            print(f"Block {block_path} processed in {block_parsing_time:.2f}s (parsing) + {write_time:.2f}s (writing)\n")
     
         self.save()
 
@@ -157,17 +157,19 @@ class BSBIIndex:
         """
         td_pairs = []
         full_block_path = os.path.join(self.data_path, block_path)
+        stopword_set = set(stopwords.words('english'))
+        stemmer = Porter2Stemmer()
         for doc_name in tqdm(sorted(next(os.walk(full_block_path))[2])):
             file_path = os.path.join(full_block_path, doc_name)
             doc_id = self.doc_id_map[doc_name]
             with open(file_path, 'r') as f:
                 content = f.read()
                 tokens = re.findall(r'\w+', content.lower())
-                filtered_tokens = [token for token in tokens if token not in stopwords.words('english')]
-                stemmed_tokens = [Porter2Stemmer().stem(token) for token in filtered_tokens]
-                for term in stemmed_tokens:
-                    term_id = self.term_id_map[term]
-                    td_pairs.append((term_id, doc_id))
+                for token in tokens:
+                    if token not in stopword_set:
+                        stemmed = stemmer.stem(token)
+                        term_id = self.term_id_map[stemmed]
+                        td_pairs.append((term_id, doc_id))
         return td_pairs
 
     def write_to_index(self, td_pairs, index):
