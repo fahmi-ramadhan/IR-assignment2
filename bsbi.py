@@ -92,8 +92,6 @@ class BSBIIndex:
                 td_pairs = None
             write_time = time.time() - write_start_time
             self.timing_stats['writing_indices'] += write_time
-
-            print(f"Block {block_path} processed in {block_parsing_time:.2f}s (parsing) + {write_time:.2f}s (writing)\n")
     
         self.save()
 
